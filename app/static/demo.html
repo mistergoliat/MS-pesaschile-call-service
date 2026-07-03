@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Agent Service Demo</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --ink: #182218;
+      --muted: #617268;
+      --panel: rgba(255, 255, 255, 0.82);
+      --line: rgba(24, 34, 24, 0.12);
+      --accent: #c85c3b;
+      --accent-strong: #9f3d22;
+      --ok: #2f8f4e;
+      --warn: #9c6a18;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(200, 92, 59, 0.18), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(47, 143, 78, 0.16), transparent 28%),
+        linear-gradient(135deg, #ece5d5, #f8f4eb 55%, #efe7d7);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(960px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 24px 70px rgba(24, 34, 24, 0.12);
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 28px 28px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 6vw, 52px);
+      line-height: 0.96;
+      max-width: 10ch;
+    }
+
+    .subtitle {
+      margin-top: 14px;
+      max-width: 62ch;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      padding: 22px 28px 28px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.75);
+      padding: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    textarea,
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    textarea {
+      min-height: 122px;
+      resize: vertical;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 13px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .primary:hover { background: var(--accent-strong); }
+
+    .secondary {
+      background: rgba(24, 34, 24, 0.08);
+      color: var(--ink);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: rgba(24, 34, 24, 0.07);
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 0 5px rgba(156, 106, 24, 0.12);
+    }
+
+    .dot.live {
+      background: var(--ok);
+      box-shadow: 0 0 0 5px rgba(47, 143, 78, 0.14);
+    }
+
+    .mono {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .logbox,
+    .transcript {
+      min-height: 260px;
+      max-height: 380px;
+      overflow: auto;
+      padding: 14px;
+      background: #fffdf9;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+
+    .hint {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">Voice Agent Service MVP</div>
+      <h1>Demo local de voz sin carrier</h1>
+      <p class="subtitle">
+        Esta pantalla inicia una sesion local por navegador, pide permiso de microfono y negocia WebRTC con OpenAI Realtime
+        a traves del backend usando <code>OPENAI_API_KEY</code> solo del lado servidor.
+      </p>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <label for="initialMessage">Mensaje inicial</label>
+        <textarea id="initialMessage">Hola, esta es una prueba tecnica autorizada del agente de voz.</textarea>
+        <div class="actions">
+          <button id="startBtn" class="primary">Iniciar sesion</button>
+          <button id="endBtn" class="secondary" disabled>Terminar sesion</button>
+        </div>
+        <div style="margin-top: 16px;" class="status">
+          <span id="statusDot" class="dot"></span>
+          <span id="statusText">Listo para iniciar</span>
+        </div>
+        <div class="hint mono" id="metaInfo">Sin sesion activa.</div>
+      </div>
+
+      <div class="card">
+        <label>Transcript / eventos de voz</label>
+        <div id="transcript" class="transcript mono"></div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <label>Logs visibles</label>
+        <div id="logs" class="logbox mono"></div>
+      </div>
+    </section>
+  </main>
+
+  <audio id="remoteAudio" autoplay></audio>
+
+  <script>
+    const startBtn = document.getElementById("startBtn");
+    const endBtn = document.getElementById("endBtn");
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const metaInfo = document.getElementById("metaInfo");
+    const logs = document.getElementById("logs");
+    const transcript = document.getElementById("transcript");
+    const initialMessage = document.getElementById("initialMessage");
+    const remoteAudio = document.getElementById("remoteAudio");
+
+    let pc = null;
+    let dc = null;
+    let mediaStream = null;
+    let callSessionId = null;
+    let assistantDelta = "";
+    let assistantAudioTranscriptSeen = false;
+
+    function log(message, data) {
+      const stamp = new Date().toLocaleTimeString("es-CL");
+      const line = `[${stamp}] ${message}${data ? ` ${JSON.stringify(data)}` : ""}`;
+      logs.textContent = `${line}\n${logs.textContent}`.trim();
+    }
+
+    function setStatus(text, live = false) {
+      statusText.textContent = text;
+      statusDot.classList.toggle("live", live);
+    }
+
+    async function postDemoEvent(eventType, payload = {}, transcriptText = null, final = false) {
+      if (!callSessionId) return;
+      try {
+        await fetch("/demo/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            call_session_id: callSessionId,
+            event_type: eventType,
+            payload,
+            transcript_text: transcriptText,
+            final,
+          }),
+        });
+      } catch (error) {
+        log("No se pudo guardar el evento en backend", { error: error.message });
+      }
+    }
+
+    function appendTranscript(prefix, text) {
+      if (!text) return;
+      transcript.textContent = `${transcript.textContent}${prefix}${text}\n`;
+    }
+
+    async function startSession() {
+      startBtn.disabled = true;
+      setStatus("Creando sesion local...", false);
+      log("Solicitando /demo/session");
+
+      try {
+        const response = await fetch("/demo/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initial_message: initialMessage.value }),
+        });
+        const sessionData = await response.json();
+
+        if (!response.ok) {
+          throw new Error(sessionData.detail || "No se pudo crear la sesion.");
+        }
+
+        callSessionId = sessionData.call_session_id;
+        metaInfo.textContent = `call_session_id=${callSessionId}\nprovider=${sessionData.provider}\nroom_id=${sessionData.room_id || "n/a"}`;
+        log("Sesion creada", sessionData);
+        await postDemoEvent("browser_session_initialized", { room_id: sessionData.room_id });
+
+        if (sessionData.warnings?.length) {
+          sessionData.warnings.forEach((warning) => log("Advertencia", { warning }));
+        }
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        await postDemoEvent("media_started", { tracks: mediaStream.getTracks().length });
+
+        pc = new RTCPeerConnection();
+        pc.ontrack = (event) => {
+          remoteAudio.srcObject = event.streams[0];
+          log("Track remoto recibido");
+        };
+        pc.onconnectionstatechange = () => {
+          log("WebRTC state", { state: pc.connectionState });
+          setStatus(`WebRTC: ${pc.connectionState}`, pc.connectionState === "connected");
+        };
+
+        mediaStream.getTracks().forEach((track) => pc.addTrack(track, mediaStream));
+        dc = pc.createDataChannel("oai-events");
+
+        dc.addEventListener("open", async () => {
+          log("Data channel abierto");
+          setStatus("Sesion conectada", true);
+          await postDemoEvent("session_created", { source: "browser" });
+          dc.send(JSON.stringify({
+            type: "response.create",
+            response: {
+              output_modalities: ["audio", "text"],
+              instructions: initialMessage.value,
+            },
+          }));
+        });
+
+        dc.addEventListener("message", async (event) => {
+          let parsed;
+          try {
+            parsed = JSON.parse(event.data);
+          } catch {
+            log("Mensaje no JSON", { raw: event.data });
+            return;
+          }
+
+          const type = parsed.type || "unknown";
+          log("Evento OpenAI", { type });
+
+          if (type === "input_audio_buffer.speech_started") {
+            await postDemoEvent("user_audio_detected", parsed);
+          }
+          if (type === "response.created") {
+            assistantDelta = "";
+            assistantAudioTranscriptSeen = false;
+            await postDemoEvent("agent_response_started", parsed);
+          }
+          if (type === "response.output_audio_transcript.delta" && parsed.delta) {
+            assistantAudioTranscriptSeen = true;
+            assistantDelta += parsed.delta;
+          }
+          if (type === "conversation.item.input_audio_transcription.completed" && parsed.transcript) {
+            appendTranscript("Usuario: ", parsed.transcript);
+            await postDemoEvent("user_transcript_completed", parsed, `Usuario: ${parsed.transcript}`, true);
+          }
+          if (type === "response.output_audio_transcript.done" && parsed.transcript) {
+            appendTranscript("Agente: ", parsed.transcript);
+          }
+          if (type === "response.output_text.delta" && parsed.delta) {
+            if (!assistantAudioTranscriptSeen) {
+              assistantDelta += parsed.delta;
+            }
+          }
+          if (type === "response.done") {
+            if (assistantDelta.trim()) {
+              await postDemoEvent("agent_response_completed", parsed, `Agente: ${assistantDelta.trim()}`, true);
+            } else {
+              await postDemoEvent("agent_response_completed", parsed);
+            }
+          }
+          if (type === "error") {
+            await postDemoEvent("error", parsed);
+          }
+        });
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const sdpResponse = await fetch("/demo/connect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            call_session_id: callSessionId,
+            offer_sdp: offer.sdp,
+            initial_message: initialMessage.value,
+          }),
+        });
+
+        if (!sdpResponse.ok) {
+          const errorJson = await sdpResponse.json().catch(() => ({}));
+          throw new Error(errorJson.detail || "OpenAI realtime rechazo la sesion.");
+        }
+
+        const sdpPayload = await sdpResponse.json();
+        const answer = { type: "answer", sdp: sdpPayload.answer_sdp };
+        await pc.setRemoteDescription(answer);
+        endBtn.disabled = false;
+      } catch (error) {
+        log("Error al iniciar sesion", { error: error.message });
+        setStatus("Error al iniciar sesion", false);
+        startBtn.disabled = false;
+      }
+    }
+
+    async function endSession() {
+      endBtn.disabled = true;
+      setStatus("Cerrando sesion...", false);
+
+      try {
+        if (dc) {
+          dc.close();
+          dc = null;
+        }
+        if (pc) {
+          pc.close();
+          pc = null;
+        }
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
+        }
+        await postDemoEvent("session_ended", { source: "browser_end" });
+
+        if (callSessionId) {
+          await fetch("/calls/end", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ call_session_id: callSessionId }),
+          });
+        }
+      } catch (error) {
+        log("Error cerrando sesion", { error: error.message });
+      } finally {
+        setStatus("Sesion finalizada", false);
+        startBtn.disabled = false;
+        callSessionId = null;
+      }
+    }
+
+    startBtn.addEventListener("click", startSession);
+    endBtn.addEventListener("click", endSession);
+  </script>
+</body>
+</html>

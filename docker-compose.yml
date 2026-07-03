@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    container_name: voice-agent-service
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+  livekit-agent:
+    build: .
+    container_name: voice-agent-service-livekit-agent
+    command: ["python", "-m", "app.core.livekit_agent_worker"]
+    env_file:
+      - .env
+    environment:
+      VOICE_AGENT_API_BASE_URL: http://app:8000
+    depends_on:
+      - app
+    volumes:
+      - ./:/app
+    profiles:
+      - livekit
