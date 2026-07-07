@@ -17,22 +17,29 @@ class LiveKitSIPProvider(VoiceProvider):
         self._status_store: dict[str, dict[str, str]] = {}
 
     def _ensure_configured(self) -> None:
-        required = [
-            self.settings.livekit_url,
-            self.settings.livekit_api_key,
-            self.settings.livekit_api_secret,
-            self.settings.livekit_sip_trunk_id,
-        ]
-        if not all(required):
+        if not all(
+            [
+                self.settings.livekit_url,
+                self.settings.livekit_api_key,
+                self.settings.livekit_api_secret,
+                self.settings.livekit_sip_trunk_id,
+            ]
+        ):
             raise AppError(
                 "LIVEKIT_NOT_CONFIGURED",
                 "Missing LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET or LIVEKIT_SIP_TRUNK_ID",
                 status_code=503,
             )
+        if not self.settings.deepseek_api_key:
+            raise AppError(
+                "DEEPSEEK_NOT_CONFIGURED",
+                "Missing DEEPSEEK_API_KEY. LiveKit test calls use DeepSeek as the agent LLM.",
+                status_code=503,
+            )
         if not self.settings.openai_api_key:
             raise AppError(
                 "OPENAI_NOT_CONFIGURED",
-                "Missing OPENAI_API_KEY. LiveKit voice agent requires OpenAI for realtime speech.",
+                "Missing OPENAI_API_KEY. LiveKit voice pipeline requires OpenAI STT/TTS.",
                 status_code=503,
             )
 

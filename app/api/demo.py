@@ -6,13 +6,20 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_agent, get_provider_registry, get_rate_limit_service, get_transcript_service
+from app.api.deps import (
+    get_agent,
+    get_deepseek_service,
+    get_provider_registry,
+    get_rate_limit_service,
+    get_transcript_service,
+)
 from app.core.agent import RealtimeVoiceAgent
 from app.core.exceptions import AppError
 from app.core.session_manager import SessionManager
 from app.db.database import get_db
 from app.models.call_session import VoiceCallSession
 from app.providers.base import VoiceProvider
+from app.schemas.chat import DemoChatRequest, DemoChatResponse
 from app.schemas.calls import (
     DemoConnectRequest,
     DemoConnectResponse,
@@ -22,6 +29,7 @@ from app.schemas.calls import (
     DemoSessionResponse,
 )
 from app.schemas.errors import ErrorResponse
+from app.services.deepseek_service import DeepSeekService
 from app.services.summary_service import SummaryService
 from app.services.transcript_service import TranscriptService
 
@@ -137,3 +145,25 @@ async def store_demo_event(
     if payload.transcript_text:
         transcript_service.append_text(db, payload.call_session_id, payload.transcript_text)
     return DemoEventResponse(ok=True, stored=True)
+
+
+@router.post(
+    "/demo/chat",
+    response_model=DemoChatResponse,
+    summary="Send a test message to DeepSeek",
+    description="Useful for validating the model conversation path without telephony or WebRTC.",
+    responses={
+        503: {"model": ErrorResponse, "description": "DeepSeek is not configured."},
+        502: {"model": ErrorResponse, "description": "DeepSeek chat request failed."},
+    },
+)
+async def chat_demo(
+    payload: DemoChatRequest,
+    deepseek_service: DeepSeekService = Depends(get_deepseek_service),
+) -> DemoChatResponse:
+    result = await deepseek_service.chat(
+        payload.message,
+        history=payload.history,
+        system_prompt=payload.system_prompt,
+    )
+    return DemoChatResponse(ok=True, model=result["model"], reply=result["reply"])

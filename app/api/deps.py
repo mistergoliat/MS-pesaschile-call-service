@@ -3,6 +3,7 @@ from fastapi import Request
 from app.config import Settings
 from app.core.agent import RealtimeVoiceAgent
 from app.providers.base import VoiceProvider
+from app.services.deepseek_service import DeepSeekService
 from app.services.compliance_service import ComplianceService
 from app.services.rate_limit_service import RateLimitService
 from app.services.summary_service import SummaryService
@@ -15,6 +16,10 @@ def get_settings_from_app(request: Request) -> Settings:
 
 def get_agent(request: Request) -> RealtimeVoiceAgent:
     return request.app.state.agent
+
+
+def get_deepseek_service(request: Request) -> DeepSeekService:
+    return request.app.state.deepseek_service
 
 
 def get_provider_registry(request: Request) -> dict[str, VoiceProvider]:

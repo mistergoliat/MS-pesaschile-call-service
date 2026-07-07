@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     openai_input_transcription_model: str = Field(
         default="gpt-4o-mini-transcribe", alias="OPENAI_INPUT_TRANSCRIPTION_MODEL"
     )
+    openai_tts_model: str = Field(default="gpt-4o-mini-tts", alias="OPENAI_TTS_MODEL")
+    openai_tts_voice: str = Field(default="ash", alias="OPENAI_TTS_VOICE")
+    deepseek_api_key: str = Field(default="", alias="DEEPSEEK_API_KEY")
+    deepseek_model: str = Field(default="deepseek-chat", alias="DEEPSEEK_MODEL")
     agent_system_prompt: str = Field(
         default=(
             "Eres un agente de voz de prueba. "

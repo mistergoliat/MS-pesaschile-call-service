@@ -15,6 +15,7 @@ from app.db.database import build_engine, build_session_factory
 from app.db.migrations import run_mvp_migrations
 from app.providers import build_provider_registry
 from app.schemas.errors import ErrorResponse
+from app.services.deepseek_service import DeepSeekService
 from app.services.compliance_service import ComplianceService
 from app.services.rate_limit_service import RateLimitService
 from app.services.summary_service import SummaryService
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.agent = agent
         app.state.summary_service = summary_service
         app.state.transcript_service = TranscriptService()
+        app.state.deepseek_service = DeepSeekService(app_settings)
         app.state.compliance_service = ComplianceService(app_settings)
         app.state.rate_limit_service = RateLimitService(app_settings.max_calls_per_minute)
         app.state.providers = build_provider_registry(app_settings, agent)

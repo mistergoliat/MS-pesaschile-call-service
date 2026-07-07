@@ -8,13 +8,14 @@ from typing import Any
 import httpx
 from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, ConversationItemAddedEvent, UserInputTranscribedEvent
-from livekit.plugins import openai
 
 from app.config import get_settings
+from app.core.livekit_voice_models import LiveKitVoiceModelFactory
 
 logger = logging.getLogger("voice-agent-service.livekit-agent")
 settings = get_settings()
 server = AgentServer()
+model_factory = LiveKitVoiceModelFactory(settings)
 
 
 class VoiceTestAssistant(Agent):
@@ -65,10 +66,9 @@ async def voice_agent_entrypoint(ctx: agents.JobContext) -> None:
     )
 
     session = AgentSession(
-        llm=openai.realtime.RealtimeModel(
-            model=settings.openai_realtime_model,
-            voice="marin",
-        )
+        llm=model_factory.build_llm(),
+        stt=model_factory.build_stt(),
+        tts=model_factory.build_tts(),
     )
 
     @session.on("user_input_transcribed")

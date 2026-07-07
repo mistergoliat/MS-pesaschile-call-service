@@ -67,7 +67,10 @@ class SessionManager:
         session.ended_at = ended_at
         session.status = status
         if session.started_at:
-            delta = ended_at - session.started_at
+            started_at = session.started_at
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            delta = ended_at - started_at
             session.duration_seconds = max(int(delta.total_seconds()), 0)
         summary = self.summary_service.build_summary(session.transcript_text, session.status)
         session.summary_json = self.summary_service.serialize(summary)

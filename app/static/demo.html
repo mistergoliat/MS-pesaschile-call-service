@@ -189,6 +189,27 @@
       line-height: 1.45;
       font-size: 14px;
     }
+
+    .chatlog {
+      min-height: 220px;
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fffdf9;
+      padding: 14px;
+      white-space: pre-wrap;
+    }
+
+    .chat-item {
+      margin-bottom: 12px;
+      line-height: 1.45;
+    }
+
+    .chat-item strong {
+      display: inline-block;
+      margin-bottom: 4px;
+    }
   </style>
 </head>
 <body>
@@ -218,6 +239,16 @@
       </div>
 
       <div class="card">
+        <label>Chat DeepSeek</label>
+        <textarea id="chatMessage" placeholder="Escribe un mensaje para probar el modelo.">Hola, quiero probar el modelo.</textarea>
+        <div class="actions">
+          <button id="sendChatBtn" class="primary">Enviar a DeepSeek</button>
+        </div>
+        <div class="hint">Esto prueba conversación directa con DeepSeek sin LiveKit ni OpenAI Realtime.</div>
+        <div id="chatLog" class="chatlog mono"></div>
+      </div>
+
+      <div class="card">
         <label>Transcript / eventos de voz</label>
         <div id="transcript" class="transcript mono"></div>
       </div>
@@ -237,6 +268,9 @@
     const statusDot = document.getElementById("statusDot");
     const statusText = document.getElementById("statusText");
     const metaInfo = document.getElementById("metaInfo");
+    const sendChatBtn = document.getElementById("sendChatBtn");
+    const chatMessage = document.getElementById("chatMessage");
+    const chatLog = document.getElementById("chatLog");
     const logs = document.getElementById("logs");
     const transcript = document.getElementById("transcript");
     const initialMessage = document.getElementById("initialMessage");
@@ -248,6 +282,7 @@
     let callSessionId = null;
     let assistantDelta = "";
     let assistantAudioTranscriptSeen = false;
+    let chatHistory = [];
 
     function log(message, data) {
       const stamp = new Date().toLocaleTimeString("es-CL");
@@ -282,6 +317,57 @@
     function appendTranscript(prefix, text) {
       if (!text) return;
       transcript.textContent = `${transcript.textContent}${prefix}${text}\n`;
+    }
+
+    function renderChat() {
+      chatLog.replaceChildren();
+      chatHistory.forEach((item) => {
+        const entry = document.createElement("div");
+        entry.className = "chat-item";
+
+        const label = document.createElement("strong");
+        label.textContent = item.role === "user" ? "Tú:" : "DeepSeek:";
+
+        const content = document.createElement("div");
+        content.textContent = item.content;
+
+        entry.appendChild(label);
+        entry.appendChild(content);
+        chatLog.appendChild(entry);
+      });
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    async function sendChat() {
+      const message = chatMessage.value.trim();
+      if (!message) return;
+
+      sendChatBtn.disabled = true;
+      chatHistory.push({ role: "user", content: message });
+      renderChat();
+      chatMessage.value = "";
+
+      try {
+        const response = await fetch("/demo/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            history: chatHistory.slice(0, -1),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail || "No se pudo obtener respuesta de DeepSeek.");
+        }
+        chatHistory.push({ role: "assistant", content: payload.reply });
+        renderChat();
+        log("DeepSeek respondió", { model: payload.model });
+      } catch (error) {
+        log("Error conversando con DeepSeek", { error: error.message });
+      } finally {
+        sendChatBtn.disabled = false;
+      }
     }
 
     async function startSession() {
@@ -455,6 +541,8 @@
 
     startBtn.addEventListener("click", startSession);
     endBtn.addEventListener("click", endSession);
+    sendChatBtn.addEventListener("click", sendChat);
+    renderChat();
   </script>
 </body>
 </html>

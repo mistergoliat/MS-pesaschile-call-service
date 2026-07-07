@@ -5,8 +5,10 @@ Microservicio modular para agentes de voz con FastAPI, Swagger/OpenAPI y una abs
 ## Que resuelve
 
 - Prueba local por navegador con `LocalWebRTCProvider` y una demo en `/demo`.
+- Chat de prueba directo con DeepSeek en `/demo/chat` y dentro de la demo web.
 - Flujo de llamadas de prueba desacoplado via `VoiceProvider`.
 - Preparacion para `LiveKitSIPProvider` con room + SIP outbound participant.
+- Motor de razonamiento del worker LiveKit basado en DeepSeek.
 - Placeholder estructural para `MetaWhatsAppCallingProvider`.
 - Persistencia de sesiones, eventos, transcript y resumen.
 - Swagger UI en `/docs` y schema OpenAPI en `/openapi.json`.
@@ -22,9 +24,9 @@ VoiceProvider abstraction
    |- MetaWhatsAppCallingProvider
    |- TwilioProvider (futuro, no implementado)
    ->
-Realtime Voice Agent
+LiveKit Voice Agent
    ->
-OpenAI Realtime API
+DeepSeek LLM + OpenAI STT/TTS
    ->
 CRM / HUB / Orchestrator futuro
 ```
@@ -71,8 +73,14 @@ cp .env.example .env
 Completa al menos:
 
 - `OPENAI_API_KEY` para la demo real por navegador con OpenAI Realtime.
+- `DEEPSEEK_API_KEY` para el LLM del worker de LiveKit.
 - `ALLOWED_TEST_NUMBER` con tu numero autorizado.
 - `LIVEKIT_*` cuando quieras probar SIP outbound real.
+
+Opcionales utiles:
+
+- `DEEPSEEK_MODEL` si quieres cambiar el modelo del motor.
+- `OPENAI_TTS_MODEL` y `OPENAI_TTS_VOICE` si quieres ajustar la voz de salida.
 
 ## Como correr local
 
@@ -102,6 +110,12 @@ http://localhost:8000/docs
 ```
 
 Demo browser:
+
+```text
+http://localhost:8000/demo
+```
+
+Chat de prueba con DeepSeek:
 
 ```text
 http://localhost:8000/demo
@@ -138,6 +152,15 @@ http://localhost:8000/openapi.json
 
 Si no configuraste `OPENAI_API_KEY`, la sesion local igual se crea y queda trazabilidad, pero `POST /demo/connect` fallara con `OPENAI_NOT_CONFIGURED`.
 
+## Probar conversacion con DeepSeek
+
+1. Abre `/demo`.
+2. Escribe un mensaje en la tarjeta `Chat DeepSeek`.
+3. Presiona `Enviar a DeepSeek`.
+4. Veras la respuesta del modelo sin pasar por LiveKit ni OpenAI Realtime.
+
+Para esto solo necesitas `DEEPSEEK_API_KEY`.
+
 ## Probar llamada test con LiveKit
 
 ```bash
@@ -164,8 +187,9 @@ El provider crea una room e intenta crear un outbound SIP participant usando `LI
 
 1. Credenciales validas de LiveKit.
 2. SIP trunk outbound ya configurado.
-3. Un agente de voz unido a la room.
-4. Ajustar webhooks/observabilidad segun tu infraestructura.
+3. `OPENAI_API_KEY` para STT/TTS y `DEEPSEEK_API_KEY` para el LLM del worker.
+4. Un agente de voz unido a la room.
+5. Ajustar webhooks/observabilidad segun tu infraestructura.
 
 El proyecto deja esa base lista, pero no mete LiveKit como dependencia del core ni como unica ruta de ejecucion.
 
@@ -207,6 +231,7 @@ Los tests cubren health, docs, OpenAPI, compliance, providers, eventos y rate li
 - No hay Redis para rate limit distribuido.
 - No hay migraciones versionadas; se usa bootstrap por metadata.
 - La demo WebRTC del navegador depende de `OPENAI_API_KEY` para audio real.
+- El worker LiveKit usa DeepSeek como LLM y OpenAI para STT/TTS, asi que necesita ambas credenciales.
 - El join del agente a una room LiveKit esta preparado conceptualmente, pero una integracion completa de agentes y operacion en produccion requerira mas wiring.
 - Meta WhatsApp Calling sigue como placeholder.
 
