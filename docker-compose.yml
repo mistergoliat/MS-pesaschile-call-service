@@ -8,6 +8,12 @@ services:
       - "8000:8000"
     volumes:
       - ./:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
   livekit-agent:
     build: .
     container_name: voice-agent-service-livekit-agent
@@ -17,7 +23,8 @@ services:
     environment:
       VOICE_AGENT_API_BASE_URL: http://app:8000
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     volumes:
       - ./:/app
     profiles:

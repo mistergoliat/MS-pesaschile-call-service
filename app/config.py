@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     meta_whatsapp_phone_number_id: str = Field(default="", alias="META_WHATSAPP_PHONE_NUMBER_ID")
     meta_whatsapp_app_secret: str = Field(default="", alias="META_WHATSAPP_APP_SECRET")
     meta_whatsapp_verify_token: str = Field(default="", alias="META_WHATSAPP_VERIFY_TOKEN")
+    meta_whatsapp_cloud_api_version: str = Field(default="v24.0", alias="META_WHATSAPP_CLOUD_API_VERSION")
+
+    whatsapp_calling_enabled: bool = Field(default=False, alias="WHATSAPP_CALLING_ENABLED")
+    whatsapp_calling_test_mode: bool = Field(default=True, alias="WHATSAPP_CALLING_TEST_MODE")
+    whatsapp_calling_allowed_callers: str = Field(default="", alias="WHATSAPP_CALLING_ALLOWED_CALLERS")
+    whatsapp_calling_max_duration_seconds: int = Field(
+        default=120, alias="WHATSAPP_CALLING_MAX_DURATION_SECONDS"
+    )
+    internal_webhook_secret: str = Field(default="", alias="INTERNAL_WEBHOOK_SECRET")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -71,6 +80,44 @@ class Settings(BaseSettings):
         if parsed.scheme and parsed.netloc:
             origins.add(f"{parsed.scheme}://{parsed.netloc}")
         return sorted(origins)
+
+    @property
+    def whatsapp_calling_allowed_callers_list(self) -> list[str]:
+        from app.core.whatsapp_calling import normalize_phone_number
+
+        callers = {
+            normalize_phone_number(caller)
+            for caller in self.whatsapp_calling_allowed_callers.split(",")
+            if normalize_phone_number(caller)
+        }
+        return sorted(callers)
+
+    @property
+    def whatsapp_calling_webhook_url(self) -> str:
+        return f"{self.public_base_url.rstrip('/')}/webhooks/meta/whatsapp-calling"
+
+    @property
+    def meta_whatsapp_configured(self) -> bool:
+        return all(
+            [
+                self.meta_whatsapp_access_token,
+                self.meta_whatsapp_phone_number_id,
+                self.meta_whatsapp_app_secret,
+                self.meta_whatsapp_verify_token,
+            ]
+        )
+
+    @property
+    def livekit_configured(self) -> bool:
+        return all([self.livekit_url, self.livekit_api_key, self.livekit_api_secret])
+
+    @property
+    def deepseek_configured(self) -> bool:
+        return bool(self.deepseek_api_key)
+
+    @property
+    def openai_speech_configured(self) -> bool:
+        return bool(self.openai_api_key)
 
 
 @lru_cache

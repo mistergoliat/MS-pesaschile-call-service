@@ -1,248 +1,253 @@
 # Voice Agent Service
 
-Microservicio modular para agentes de voz con FastAPI, Swagger/OpenAPI y una abstraccion de provider para evitar acoplar el core a Twilio, LiveKit, Meta o cualquier carrier especifico.
+Microservicio FastAPI para una prueba real de llamada entrante de WhatsApp con LiveKit, DeepSeek y OpenAI STT/TTS.
 
-## Que resuelve
+## Objetivo de esta iteracion
 
-- Prueba local por navegador con `LocalWebRTCProvider` y una demo en `/demo`.
-- Chat de prueba directo con DeepSeek en `/demo/chat` y dentro de la demo web.
-- Flujo de llamadas de prueba desacoplado via `VoiceProvider`.
-- Preparacion para `LiveKitSIPProvider` con room + SIP outbound participant.
-- Motor de razonamiento del worker LiveKit basado en DeepSeek.
-- Placeholder estructural para `MetaWhatsAppCallingProvider`.
-- Persistencia de sesiones, eventos, transcript y resumen.
-- Swagger UI en `/docs` y schema OpenAPI en `/openapi.json`.
-
-## Arquitectura
+Esta iteracion deja listo el flujo:
 
 ```text
-Voice Agent Service
-   ->
-VoiceProvider abstraction
-   |- LocalWebRTCProvider
-   |- LiveKitSIPProvider
-   |- MetaWhatsAppCallingProvider
-   |- TwilioProvider (futuro, no implementado)
-   ->
-LiveKit Voice Agent
-   ->
-DeepSeek LLM + OpenAI STT/TTS
-   ->
-CRM / HUB / Orchestrator futuro
+WhatsApp personal
+-> llama a +56 9 2175 7996
+-> Meta envía webhook calls con call_id y SDP offer
+-> voice-agent-service valida la firma o el secreto interno
+-> acepta la llamada con LiveKit AcceptWhatsAppCall
+-> LiveKit crea la room
+-> se despacha el agente whatsapp-agent
+-> el agente escucha, transcribe y responde
+-> DeepSeek genera el texto
+-> OpenAI genera STT/TTS
+-> el usuario escucha la IA
 ```
 
-El core maneja sesiones, eventos, transcript, resumen y guardrails. No sabe si el audio viene del navegador, de LiveKit SIP o de una futura API de llamadas.
+No se renta ningun numero.
+No se usa SIP.
+No se implementan llamadas salientes.
+No se toca el catalogo, CRM, cotizaciones, tools comerciales ni el worker autonomo.
 
-## Por que no depende de Twilio
+## Que queda funcionando
 
-Twilio no es la base del sistema ni aparece en el core. Toda la logica pasa por la interfaz `VoiceProvider`, de modo que un adapter futuro de Twilio seria opcional y reemplazable. El flujo principal de este MVP esta pensado para:
-
-1. Navegador/WebRTC sin carrier.
-2. LiveKit + SIP trunk para llamadas reales autorizadas.
-3. Placeholder para Meta WhatsApp Calling con consentimiento previo.
-
-## Estructura
-
-```text
-voice-agent-service/
-  app/
-    api/
-    core/
-    db/
-    models/
-    providers/
-    schemas/
-    services/
-    static/demo.html
-    config.py
-    main.py
-  tests/
-  Dockerfile
-  docker-compose.yml
-  requirements.txt
-  .env.example
-  README.md
-```
+- `GET /webhooks/meta/whatsapp-calling` para verificacion de Meta.
+- `POST /webhooks/meta/whatsapp-calling` para eventos directos de Meta o forward interno.
+- `GET /diagnostics/whatsapp-calling` para validar readiness sin exponer secretos.
+- Worker LiveKit con DeepSeek como LLM y OpenAI solo para STT/TTS.
+- Persistencia de sesiones y eventos de llamada.
+- Mensajeria existente y endpoints previos sin cambios de comportamiento.
 
 ## Variables de entorno
 
-```bash
-cp .env.example .env
-```
-
-Completa al menos:
-
-- `OPENAI_API_KEY` para la demo real por navegador con OpenAI Realtime.
-- `DEEPSEEK_API_KEY` para el LLM del worker de LiveKit.
-- `ALLOWED_TEST_NUMBER` con tu numero autorizado.
-- `LIVEKIT_*` cuando quieras probar SIP outbound real.
-
-Opcionales utiles:
-
-- `DEEPSEEK_MODEL` si quieres cambiar el modelo del motor.
-- `OPENAI_TTS_MODEL` y `OPENAI_TTS_VOICE` si quieres ajustar la voz de salida.
-
-## Como correr local
+### Requeridas para WhatsApp calling
 
 ```bash
-docker compose up --build
+META_WHATSAPP_ACCESS_TOKEN=
+META_WHATSAPP_PHONE_NUMBER_ID=1030337916832905
+META_WHATSAPP_APP_SECRET=
+META_WHATSAPP_VERIFY_TOKEN=
+META_WHATSAPP_CLOUD_API_VERSION=v24.0
+
+LIVEKIT_URL=
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+LIVEKIT_AGENT_NAME=whatsapp-agent
+
+DEEPSEEK_API_KEY=
+DEEPSEEK_MODEL=deepseek-chat
+
+OPENAI_API_KEY=
+OPENAI_INPUT_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+OPENAI_TTS_MODEL=gpt-4o-mini-tts
+OPENAI_TTS_VOICE=ash
+
+WHATSAPP_CALLING_ENABLED=false
+WHATSAPP_CALLING_TEST_MODE=true
+WHATSAPP_CALLING_ALLOWED_CALLERS=
+WHATSAPP_CALLING_MAX_DURATION_SECONDS=120
+
+INTERNAL_WEBHOOK_SECRET=
+PUBLIC_BASE_URL=https://tu-dominio-publico
 ```
 
-Si prefieres correr sin Docker:
+### Notas
+
+- `WHATSAPP_CALLING_ALLOWED_CALLERS` acepta numeros E.164 separados por comas.
+- `WHATSAPP_CALLING_ENABLED` debe quedar en `true` para procesar llamadas reales.
+- `WHATSAPP_CALLING_TEST_MODE=true` limita la entrada a los numeros permitidos.
+- `PUBLIC_BASE_URL` debe apuntar a la URL publica real del backend.
+- La URL publica del webhook es:
+
+```text
+${PUBLIC_BASE_URL}/webhooks/meta/whatsapp-calling
+```
+
+## Docker
+
+Levanta el backend y el worker LiveKit con:
 
 ```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+docker compose --profile livekit up -d --build
 ```
 
-## Como probar
+Servicios esperados:
 
-Health:
+- FastAPI en `http://localhost:8000`
+- Worker LiveKit ejecutando `python -m app.core.livekit_agent_worker`
+
+El servicio `app` tiene healthcheck en `/health` y `livekit-agent` arranca cuando `app` esta healthy.
+
+## Endpoints relevantes
+
+- `GET /health`
+- `GET /diagnostics/whatsapp-calling`
+- `GET /webhooks/meta/whatsapp-calling`
+- `POST /webhooks/meta/whatsapp-calling`
+- `POST /calls/end`
+- `GET /calls/{call_id}`
+- `POST /calls/{call_id}/events`
+- `GET /docs`
+
+## Como enrutar calls sin romper messages
+
+El endpoint de WhatsApp calling ya acepta dos modos:
+
+- Modo directo Meta:
+  - enviar `X-Hub-Signature-256`
+  - el backend lee el body crudo
+  - valida HMAC SHA-256 con `META_WHATSAPP_APP_SECRET`
+  - luego parsea JSON
+
+- Modo forward interno:
+  - enviar `X-Internal-Webhook-Secret`
+  - el valor debe coincidir con `INTERNAL_WEBHOOK_SECRET`
+  - no se aceptan requests sin firma Meta ni secreto interno
+
+Esto permite que el webhook actual de mensajes reenvie eventos de calls a:
+
+```text
+POST /webhooks/meta/whatsapp-calling
+```
+
+sin alterar el manejo de messages.
+
+## Configuracion exacta en Meta
+
+1. Usa el numero empresarial existente `+56 9 2175 7996`.
+2. No rentar ni provisionar otro numero en LiveKit.
+3. Mantener SIP desactivado en Meta.
+4. Suscribir el webhook a `calls`.
+5. Configurar el callback URL publico:
+
+```text
+https://tu-dominio-publico/webhooks/meta/whatsapp-calling
+```
+
+6. Configurar `META_WHATSAPP_VERIFY_TOKEN` con el mismo valor en Meta y en `.env`.
+7. Configurar `META_WHATSAPP_APP_SECRET`.
+8. Configurar `META_WHATSAPP_ACCESS_TOKEN`.
+9. Confirmar `META_WHATSAPP_PHONE_NUMBER_ID=1030337916832905`.
+10. Usar Cloud API v24.0 salvo incompatibilidad comprobada.
+
+### Firma del webhook
+
+El backend valida `X-Hub-Signature-256` con HMAC SHA-256 sobre el body crudo usando `META_WHATSAPP_APP_SECRET`.
+
+## Configuracion minima exacta en LiveKit
+
+1. Proveer `LIVEKIT_URL`, `LIVEKIT_API_KEY` y `LIVEKIT_API_SECRET`.
+2. No crear trunk SIP para esta prueba.
+3. Mantener el worker con `LIVEKIT_AGENT_NAME=whatsapp-agent`.
+4. No rentar ningun numero en LiveKit.
+5. Permitir que el connector cree la room al aceptar la llamada inbound.
+
+El request usa `AcceptWhatsAppCall` con `RoomAgentDispatch(agent_name="whatsapp-agent")`.
+
+## Procedimiento de prueba real
+
+1. Levanta el stack con Docker.
+2. Verifica readiness:
 
 ```bash
 curl http://localhost:8000/health
+curl http://localhost:8000/diagnostics/whatsapp-calling
 ```
 
-Swagger UI:
+3. En Meta, confirma que el webhook de `calls` esta suscrito y el callback responde `200`.
+4. Desde un WhatsApp personal, llama al numero empresarial `+56 9 2175 7996`.
+5. El webhook debe llegar a `POST /webhooks/meta/whatsapp-calling`.
+6. El backend debe aceptar la llamada con LiveKit.
+7. El worker debe unirse a la room como `whatsapp-agent`.
+8. La voz de salida debe venir de OpenAI TTS.
+9. Las respuestas deben ser generadas por DeepSeek.
+10. La llamada debe cortar a los `120` segundos o al terminar el usuario.
 
-```text
-http://localhost:8000/docs
-```
+## Troubleshooting
 
-Demo browser:
+- `META_WHATSAPP_WEBHOOK_VERIFICATION_FAILED`
+  - el verify token no coincide.
 
-```text
-http://localhost:8000/demo
-```
+- `META_WHATSAPP_SIGNATURE_INVALID`
+  - la firma `X-Hub-Signature-256` no coincide con el body crudo.
 
-Chat de prueba con DeepSeek:
+- `WEBHOOK_AUTH_REQUIRED`
+  - faltan firma Meta e `X-Internal-Webhook-Secret`.
 
-```text
-http://localhost:8000/demo
-```
+- `WHATSAPP_CALLING_DISABLED`
+  - `WHATSAPP_CALLING_ENABLED` sigue en `false`.
 
-OpenAPI schema:
+- `META_WHATSAPP_CALLER_BLOCKED`
+  - el caller no esta en `WHATSAPP_CALLING_ALLOWED_CALLERS` durante test mode.
 
-```text
-http://localhost:8000/openapi.json
-```
+- `META_WHATSAPP_PHONE_NUMBER_ID_MISMATCH`
+  - el webhook trae un phone number id distinto al configurado.
 
-## Endpoints principales
+- `META_WHATSAPP_SDP_MISSING`
+  - el payload no trae SDP offer.
 
-- `GET /health`
-- `GET /docs`
-- `GET /openapi.json`
-- `GET /demo`
-- `POST /demo/session`
-- `POST /demo/connect`
-- `POST /demo/events`
-- `POST /calls/test`
-- `POST /calls/end`
-- `GET /calls/{call_id}`
-- `POST /webhooks/livekit`
-- `POST /webhooks/meta/whatsapp-calling`
+- `LIVEKIT_CALL_ACCEPT_FAILED`
+  - revisar credenciales de LiveKit, token de Meta y conectividad del connector.
 
-## Probar llamada local por navegador
+- `LIVEKIT_CALL_DISCONNECT_FAILED`
+  - revisar que la llamada siga activa y que LiveKit acepte el disconnect.
 
-1. Abre `/demo`.
-2. Presiona `Iniciar sesion`.
-3. Acepta permiso de microfono.
-4. Si `OPENAI_API_KEY` esta configurada, el backend negociara el SDP con OpenAI Realtime y el navegador abrira la sesion WebRTC sin exponer la API key al cliente.
-5. Los eventos del browser se guardan en `voice_call_events`.
+- `OPENAI_NOT_CONFIGURED`
+  - falta `OPENAI_API_KEY` para STT/TTS.
 
-Si no configuraste `OPENAI_API_KEY`, la sesion local igual se crea y queda trazabilidad, pero `POST /demo/connect` fallara con `OPENAI_NOT_CONFIGURED`.
-
-## Probar conversacion con DeepSeek
-
-1. Abre `/demo`.
-2. Escribe un mensaje en la tarjeta `Chat DeepSeek`.
-3. Presiona `Enviar a DeepSeek`.
-4. Veras la respuesta del modelo sin pasar por LiveKit ni OpenAI Realtime.
-
-Para esto solo necesitas `DEEPSEEK_API_KEY`.
-
-## Probar llamada test con LiveKit
-
-```bash
-curl -X POST http://localhost:8000/calls/test \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "livekit",
-    "to": "+569XXXXXXXX",
-    "initial_message": "Hola, esta es una prueba tecnica autorizada."
-  }'
-```
-
-Guardrails activos:
-
-- Solo permite `provider=livekit` con `to == ALLOWED_TEST_NUMBER`.
-- Bloquea numeros fuera de E.164.
-- Bloquea numeros en suppression list.
-- Bloquea llamadas masivas y cold calling por diseno.
-- Rate limit maximo: `MAX_CALLS_PER_MINUTE`.
-
-## Preparacion de LiveKit SIP
-
-El provider crea una room e intenta crear un outbound SIP participant usando `LIVEKIT_SIP_TRUNK_ID`. Para completarlo en un entorno real necesitas:
-
-1. Credenciales validas de LiveKit.
-2. SIP trunk outbound ya configurado.
-3. `OPENAI_API_KEY` para STT/TTS y `DEEPSEEK_API_KEY` para el LLM del worker.
-4. Un agente de voz unido a la room.
-5. Ajustar webhooks/observabilidad segun tu infraestructura.
-
-El proyecto deja esa base lista, pero no mete LiveKit como dependencia del core ni como unica ruta de ejecucion.
-
-Para levantar tambien el worker del agente LiveKit en Docker Compose:
-
-```bash
-docker compose --profile livekit up --build
-```
-
-## Meta WhatsApp Calling
-
-El archivo `app/providers/meta_whatsapp_calling.py` existe como placeholder seguro:
-
-- deja el punto de extension para webhook de eventos;
-- deja claro que hara falta consentimiento y permission workflow;
-- devuelve error controlado `META_WHATSAPP_CALLING_NOT_IMPLEMENTED`.
-
-No implementa llamadas reales todavia.
-
-## Base de datos
-
-SQLAlchemy usa SQLite para el MVP y el diseno es portable a PostgreSQL. Se crean estas tablas:
-
-- `voice_call_sessions`
-- `voice_call_events`
-- `voice_call_permissions`
-- `voice_suppression_list`
+- `DEEPSEEK_NOT_CONFIGURED`
+  - falta `DEEPSEEK_API_KEY` para el worker.
 
 ## Tests
+
+Ejecutar:
 
 ```bash
 pytest
 ```
 
-Los tests cubren health, docs, OpenAPI, compliance, providers, eventos y rate limit.
+La suite ya cubre:
 
-## Limitaciones del MVP
+- verificacion Meta valida e invalida;
+- firma Meta valida e invalida;
+- secreto interno valido e invalido;
+- connect inbound;
+- allowlist de callers;
+- feature flag apagado;
+- phone_number_id incorrecto;
+- call_id faltante;
+- SDP faltante;
+- evento duplicado;
+- idempotencia de sesion;
+- AcceptWhatsAppCall invocado correctamente;
+- error de LiveKit;
+- terminate;
+- DisconnectWhatsAppCall;
+- diagnostics sin secretos;
+- no regresion de endpoints existentes.
 
-- No hay Redis para rate limit distribuido.
-- No hay migraciones versionadas; se usa bootstrap por metadata.
-- La demo WebRTC del navegador depende de `OPENAI_API_KEY` para audio real.
-- El worker LiveKit usa DeepSeek como LLM y OpenAI para STT/TTS, asi que necesita ambas credenciales.
-- El join del agente a una room LiveKit esta preparado conceptualmente, pero una integracion completa de agentes y operacion en produccion requerira mas wiring.
-- Meta WhatsApp Calling sigue como placeholder.
+## Estado del flujo
 
-## Compliance
+Quedan fuera de esta iteracion:
 
-No usar este servicio para:
+- llamadas salientes;
+- SIP;
+- catalogo, CRM y cotizaciones;
+- integracion con worker autonomo comercial.
 
-- prospeccion fria;
-- autodialing;
-- campanas masivas;
-- llamadas sin consentimiento;
-- listas de contactos.
-
-Este MVP esta pensado solo para pruebas controladas y numeros autorizados.

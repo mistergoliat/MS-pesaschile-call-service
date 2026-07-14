@@ -32,7 +32,7 @@ def test_meta_whatsapp_not_implemented(client):
     response = client.post("/calls/test", json={"provider": "meta_whatsapp"})
 
     assert response.status_code == 501
-    assert response.json()["error"] == "META_WHATSAPP_CALLING_NOT_IMPLEMENTED"
+    assert response.json()["error"] == "WHATSAPP_CALLING_OUTBOUND_DISABLED"
 
 
 def test_call_status_returns_session(client):
